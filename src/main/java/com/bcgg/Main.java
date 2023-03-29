@@ -21,7 +21,7 @@ public class Main {
     }
 
 
-    public static void generateGroup(List<Spot> spotList) {
+    public static Map<Spot, List<Spot>> generateGroup(List<Spot> spotList) {
         System.out.println("[Spot Lat, Lon]");
         for(int n = 0; n < spotList.size(); n++) {
             System.out.printf("k%d : (%f, %f)\n", n + 1, spotList.get(n).getLatitude(), spotList.get(n).getLongitude());
@@ -46,13 +46,7 @@ public class Main {
         }
 
         // k-mean clustering algorithm
-        var result = kMeansAlgorithm(kMeansRepeat, spotList, kSpots);
-
-        for(int k = 0; k < kSpots.size(); k++) {
-            System.out.printf("k%d : (%f, %f)\n", k + 1, kSpots.get(k)[0], kSpots.get(k)[1]);
-        }
-
-        List<Spot> kSpotList = kSpots.stream().map(doubles -> new Spot(doubles[0], doubles[1])).toList();
+        return kMeansAlgorithm(kMeansRepeat, spotList, kSpots);
     }
 
     private static Map<Spot, List<Spot>> kMeansAlgorithm(int kMeansRepeat, List<Spot> spotList, List<double[]> kSpots) {
