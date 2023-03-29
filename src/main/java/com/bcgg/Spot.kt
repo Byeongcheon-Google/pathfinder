@@ -3,7 +3,7 @@ package com.bcgg
 import java.time.LocalTime
 import java.util.Locale
 
-data class Spot(
+data class Spot @JvmOverloads constructor(
         val latitude: Double,
         val longitude: Double,
         val type: Type = Type.House,

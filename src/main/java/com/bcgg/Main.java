@@ -2,9 +2,7 @@ package com.bcgg;
 
 import java.math.BigInteger;
 import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 public class Main {
     public static void main(String[] args) {
@@ -21,6 +19,7 @@ public class Main {
     ) {
         generateGroup(spotList);
     }
+
 
     public static void generateGroup(List<Spot> spotList) {
         System.out.println("[Spot Lat, Lon]");
@@ -47,16 +46,19 @@ public class Main {
         }
 
         // k-mean clustering algorithm
-        kMeansAlgorithm(kMeansRepeat, spotList, kSpots);
+        var result = kMeansAlgorithm(kMeansRepeat, spotList, kSpots);
 
         for(int k = 0; k < kSpots.size(); k++) {
             System.out.printf("k%d : (%f, %f)\n", k + 1, kSpots.get(k)[0], kSpots.get(k)[1]);
         }
+
+        List<Spot> kSpotList = kSpots.stream().map(doubles -> new Spot(doubles[0], doubles[1])).toList();
     }
 
-    private static void kMeansAlgorithm(int kMeansRepeat, List<Spot> spotList, List<double[]> kSpots) {
+    private static Map<Spot, List<Spot>> kMeansAlgorithm(int kMeansRepeat, List<Spot> spotList, List<double[]> kSpots) {
+        boolean[][] rnk = new boolean[spotList.size()][kSpots.size()];
         for (int i = 0; i < kMeansRepeat; i++) {
-            boolean[][] rnk = new boolean[spotList.size()][kSpots.size()];
+            rnk = new boolean[spotList.size()][kSpots.size()];
             //Assignment step
             for (int n = 0; n < spotList.size(); n++) {
                 int minK = 0;
@@ -87,6 +89,25 @@ public class Main {
                 kSpots.get(k)[1] = (1.0 / rnkSum) * rnkxnY;
             }
         }
+
+
+        //Generate result Map
+        Map<Spot, List<Spot>> result = new HashMap<>();
+
+        for(int k = 0; k < kSpots.size(); k++) {
+            Spot kSpot = new Spot(kSpots.get(k)[0], kSpots.get(k)[1]);
+            List<Spot> spots = new ArrayList<>();
+
+            for(int j = 0; j < spotList.size(); j++) {
+                if(rnk[j][k]) {
+                    spots.add(spotList.get(j));
+                }
+            }
+
+            result.put(kSpot, spots);
+        }
+
+        return result;
     }
 
     private static List<double[]> generateKSpots(double midLatitude, double midLongitude, Spot longestPoint, int kCount) {
