@@ -1,5 +1,6 @@
 package com.bcgg;
 
+import java.math.BigInteger;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,30 +28,70 @@ public class Main {
             System.out.printf("k%d : (%f, %f)\n", n + 1, spotList.get(n).getLatitude(), spotList.get(n).getLongitude());
         }
 
-        int I = 5;
+        int kMeansRepeat = 5;
+        int kCount = 2;
 
         double midLatitude = MidpointCalculator.INSTANCE.calculate(spotList.stream().map(Spot::getLatitude).toList());
         double midLongitude = MidpointCalculator.INSTANCE.calculate(spotList.stream().map(Spot::getLongitude).toList());
 
-        //먼 좌표 구하기
-        Spot longestPoint = spotList.get(0);
-        double longestDistance = 0.0;
+        Spot longestPoint = getLongestPoint(spotList, midLatitude, midLongitude);
 
-        for (Spot spot : spotList) {
-            double distance = DistanceCalculator.distance(midLatitude, midLongitude, spot.getLatitude(), spot.getLongitude());
-            if (distance > longestDistance) {
-                longestPoint = spot;
-                longestDistance = distance;
-            }
+        List<double[]> kSpots = generateKSpots(midLatitude, midLongitude, longestPoint, kCount);
+
+        System.out.println("[Midpoint]");
+        System.out.printf("(%f, %f)\n", midLatitude, midLongitude);
+
+        System.out.println("[Initial K positions]");
+        for(int k = 0; k < kSpots.size(); k++) {
+            System.out.printf("k%d : (%f, %f)\n", k + 1, kSpots.get(k)[0], kSpots.get(k)[1]);
         }
 
-        // k 구하기
-        int kCount = 2;
+        // k-mean clustering algorithm
+        kMeansAlgorithm(kMeansRepeat, spotList, kSpots);
 
+        for(int k = 0; k < kSpots.size(); k++) {
+            System.out.printf("k%d : (%f, %f)\n", k + 1, kSpots.get(k)[0], kSpots.get(k)[1]);
+        }
+    }
+
+    private static void kMeansAlgorithm(int kMeansRepeat, List<Spot> spotList, List<double[]> kSpots) {
+        for (int i = 0; i < kMeansRepeat; i++) {
+            boolean[][] rnk = new boolean[spotList.size()][kSpots.size()];
+            //Assignment step
+            for (int n = 0; n < spotList.size(); n++) {
+                int minK = 0;
+                double minDistance = Double.MAX_VALUE;
+
+                for (int k = 0; k < kSpots.size(); k++) {
+                    double distance = DistanceCalculator.distance(kSpots.get(k)[0], kSpots.get(k)[1], spotList.get(n).getLatitude(), spotList.get(n).getLongitude());
+                    if(minDistance > distance) {
+                        minK = k;
+                        minDistance = distance;
+                    }
+                }
+
+                rnk[n][minK] = true;
+            }
+
+            //Update step
+            for(int k = 0; k < kSpots.size(); k++) {
+                int rnkSum = 0;
+                double rnkxnX = 0;
+                double rnkxnY = 0;
+                for(int j = 0; j < spotList.size(); j++) {
+                    rnkSum += rnk[j][k] ? 1 : 0;
+                    rnkxnX += (rnk[j][k] ? 1 : 0) * spotList.get(j).getLatitude();
+                    rnkxnY += (rnk[j][k] ? 1 : 0) * spotList.get(j).getLongitude();
+                }
+                kSpots.get(k)[0] = (1.0 / rnkSum) * rnkxnX;
+                kSpots.get(k)[1] = (1.0 / rnkSum) * rnkxnY;
+            }
+        }
+    }
+
+    private static List<double[]> generateKSpots(double midLatitude, double midLongitude, Spot longestPoint, int kCount) {
         List<double[]> kSpot = new ArrayList<>();
-
         kSpot.add(new double[]{longestPoint.getLatitude(), longestPoint.getLongitude()});
-
         for (int i = 1; i < kCount; i++) {
             double lat = longestPoint.getLatitude() - midLatitude;
             double lon = longestPoint.getLongitude() - midLongitude;
@@ -63,53 +104,21 @@ public class Main {
             kSpot.add(rotated);
         }
 
-        System.out.println("[Midpoint]");
-        System.out.printf("(%f, %f)\n", midLatitude, midLongitude);
+        return kSpot;
+    }
 
-
-        System.out.println("[Initial K positions]");
-        for(int k = 0; k < kSpot.size(); k++) {
-            System.out.printf("k%d : (%f, %f)\n", k + 1, kSpot.get(k)[0], kSpot.get(k)[1]);
-        }
-
-        // k-mean clustering algorithm
-        for (int i = 0; i < I; i++) {
-            boolean[][] rnk = new boolean[spotList.size()][kSpot.size()];
-            //Assignment step
-            for (int n = 0; n < spotList.size(); n++) {
-                int minK = 0;
-                double minDistance = Double.MAX_VALUE;
-
-                for (int k = 0; k < kSpot.size(); k++) {
-                    double distance = DistanceCalculator.distance(kSpot.get(k)[0], kSpot.get(k)[1], spotList.get(n).getLatitude(), spotList.get(n).getLongitude());
-                    if(minDistance > distance) {
-                        minK = k;
-                        minDistance = distance;
-                    }
-                }
-
-                rnk[n][minK] = true;
-            }
-
-            //Update step
-            for(int k = 0; k < kSpot.size(); k++) {
-                int rnkSum = 0;
-                double rnkxnX = 0;
-                double rnkxnY = 0;
-                for(int j = 0; j < spotList.size(); j++) {
-                    rnkSum += rnk[j][k] ? 1 : 0;
-                    rnkxnX += (rnk[j][k] ? 1 : 0) * spotList.get(j).getLatitude();
-                    rnkxnY += (rnk[j][k] ? 1 : 0) * spotList.get(j).getLongitude();
-                }
-                kSpot.get(k)[0] = (1.0 / rnkSum) * rnkxnX;
-                kSpot.get(k)[1] = (1.0 / rnkSum) * rnkxnY;
-            }
-
-            System.out.printf("[Updated K positions #%d]\n", i + 1);
-            for(int k = 0; k < kSpot.size(); k++) {
-                System.out.printf("k%d : (%f, %f)\n", k + 1, kSpot.get(k)[0], kSpot.get(k)[1]);
+    private static Spot getLongestPoint(List<Spot> spotList, double midLatitude, double midLongitude) {
+        //먼 좌표 구하기
+        Spot longestPoint = spotList.get(0);
+        double longestDistance = 0.0;
+        for (Spot spot : spotList) {
+            double distance = DistanceCalculator.distance(midLatitude, midLongitude, spot.getLatitude(), spot.getLongitude());
+            if (distance > longestDistance) {
+                longestPoint = spot;
+                longestDistance = distance;
             }
         }
+        return longestPoint;
     }
 
     public static double[] rotateVector(double[] vector, double angle) {
