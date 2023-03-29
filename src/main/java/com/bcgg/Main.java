@@ -1,5 +1,7 @@
 package com.bcgg;
 
+import com.sun.jdi.connect.Transport;
+
 import java.math.BigInteger;
 import java.time.LocalTime;
 import java.util.*;
@@ -34,21 +36,32 @@ public class Main {
         double midLongitude = MidpointCalculator.INSTANCE.calculate(spotList.stream().map(Spot::getLongitude).toList());
 
         Spot longestPoint = getLongestPoint(spotList, midLatitude, midLongitude);
+        List<double[]> kSpots = new ArrayList<>();
+        Map<Spot, List<Spot>> result = null;
+        int maxCount = Integer.MAX_VALUE;
 
-        List<double[]> kSpots = generateKSpots(midLatitude, midLongitude, longestPoint, kCount);
+        while (maxCount > 5) {
+            maxCount = 0;
+            kSpots = generateKSpots(midLatitude, midLongitude, longestPoint, kCount++);
+
+            // k-mean clustering algorithm
+            result = kMeansAlgorithm(kMeansRepeat, spotList, kSpots);
+
+            for (var spot : result.keySet()) {
+                int size = result.get(spot).size();
+                if(maxCount < size) maxCount = size;
+            }
+        }
 
         System.out.println("[Midpoint]");
         System.out.printf("(%f, %f)\n", midLatitude, midLongitude);
 
         System.out.println("[Initial K positions]");
-        for(int k = 0; k < kSpots.size(); k++) {
+        for (int k = 0; k < kSpots.size(); k++) {
             System.out.printf("k%d : (%f, %f)\n", k + 1, kSpots.get(k)[0], kSpots.get(k)[1]);
         }
 
-        // k-mean clustering algorithm
-        var result = kMeansAlgorithm(kMeansRepeat, spotList, kSpots);
-
-        for(int k = 0; k < kSpots.size(); k++) {
+        for (int k = 0; k < kSpots.size(); k++) {
             System.out.printf("k%d : (%f, %f)\n", k + 1, kSpots.get(k)[0], kSpots.get(k)[1]);
         }
 
