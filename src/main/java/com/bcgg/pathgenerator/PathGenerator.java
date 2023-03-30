@@ -26,7 +26,6 @@ public class PathGenerator {
         generateGroup(spotList);
     }
 
-
     @NotNull
     public static Map<Spot.K, List<Spot>> generateGroup(@NotNull List<Spot> spotList) {
         int kMeansRepeat = 5;
