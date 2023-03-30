@@ -2,6 +2,7 @@ package com.bcgg
 
 import com.bcgg.pathgenerator.model.Spot
 import com.bcgg.pathgenerator.PathGenerator
+import com.bcgg.shortRoute.ShortRoute
 
 fun main() {
     val spots = listOf(
@@ -17,6 +18,12 @@ fun main() {
             Spot.Tour(39.62395236398993, 126.78309104541616),
             Spot.Tour(39.66054391049293, 126.14327542490577)
     )
+    val house = Spot.House(35.143390338353605, 124.19934255270758)
+    val generateGroup = PathGenerator.generateGroup(spots)
+    val kSpots = generateGroup.keys.toList()
+    ShortRoute.init(kSpots, house)
+    ShortRoute.dijkstra()
+    val result = ShortRoute.result(kSpots, house)
+    println(result)
 
-    PathGenerator.generateGroup(spots)
 }
