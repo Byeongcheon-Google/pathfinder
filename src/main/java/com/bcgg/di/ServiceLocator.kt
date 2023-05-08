@@ -61,8 +61,8 @@ object Samples {
         Point(name="리고엠",lat=37.7641862993,lon=128.8770014492,
             classification = Point.Classification.Travel,
             stayTimeMinute = 70
-        ),
-        Point(name="동산항물회",lat=37.7672032219,lon=128.9080763334,
+        ),*/
+        /*Point(name="동산항물회",lat=37.7672032219,lon=128.9080763334,
             classification = Point.Classification.Food,
             stayTimeMinute = 60
         ),*/

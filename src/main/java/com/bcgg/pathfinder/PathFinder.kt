@@ -5,14 +5,14 @@ import com.bcgg.di.ServiceLocator
 import com.bcgg.model.PathFinderInput
 import com.bcgg.model.Point
 import com.bcgg.repository.DirectionsRepository
+import com.bcgg.util.LocalTimeSerializer
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import io.reactivex.rxjava3.core.*
 import kotlinx.coroutines.runBlocking
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-import java.util.PriorityQueue
-import kotlin.math.PI
-import kotlin.math.exp
-import kotlin.math.pow
-import kotlin.math.sqrt
+import kotlin.math.*
 
 /**
  * Path finding class
@@ -40,51 +40,91 @@ class PathFinder(
         private set
     val isCalculated: Boolean get() = calculateEndTime != null
     private val allPoints = (input.points + listOf(input.startPoint, input.endPoint)).toSet()
+    private val edgesCount: Long = (allPoints.size - 3).factorial * 2
 
     var minCost = Double.MAX_VALUE
         private set
     private val startTimeDouble = input.startTime.double
     private val endTimeDouble = input.endHopeTime.double
     private val mealTimesDouble = input.mealTimes.map { it.double }
-    private var path: List<Point>? = null
+    private var _path: List<Point>? = null
+    private var functionCallCount = 0L
 
-    suspend fun getPath(): List<Pair<Point, ClosedRange<LocalTime>>> {
-        if(path.isNullOrEmpty()) {
-            runDfs(
-                depth = 0,
-                currentWeight = 1.0,
-                visited = listOf(input.startPoint),
-                mealTimes = listOf(),
-                elapsedTimeHour = 0.0
-            )
+    private var result: PathFinderResult? = null
 
-            calculateEndTime = LocalTime.now()
-        }
+    fun getPath(): Flowable<PathFinderState> {
+        return Flowable.create({ emitter ->
+            runBlocking {
+                try {
+                    if (_path.isNullOrEmpty()) {
+                        runDfs(
+                            depth = 1,
+                            flowableEmitter = emitter,
+                            middleMinCost = Double.MAX_VALUE,
+                            currentWeight = 1.0,
+                            visited = listOf(input.startPoint),
+                            mealTimes = listOf(),
+                            elapsedTimeHour = 0.0
+                        )
 
-        var startTime = startTimeDouble
-        var previous: Point? = null
+                        calculateEndTime = LocalTime.now()
+                    }
 
-        return path!!.map { point ->
-            if(previous != null) {
-                startTime += directionsRepository.getMoveTime(allPoints, previous!!, point)
+                    var startTime = startTimeDouble
+                    var previous: Point? = null
+
+                    val resultPath = _path!!.map { point ->
+                        if (previous != null) {
+                            startTime += directionsRepository.getMoveTime(allPoints, previous!!, point)
+                        }
+                        val startLocalTime = LocalTime.of(startTime.hour, startTime.minute, 0)
+                        startTime += point.stayTimeMinute / 60.0
+                        val endLocalTime = startLocalTime.plusMinutes(point.stayTimeMinute)
+
+                        previous = point
+
+                        point to startLocalTime..endLocalTime
+                    }
+
+                    emitter.onNext(
+                        PathFinderState.Found(
+                            path = resultPath,
+                            time = calculateEndTime!!
+                        )
+                    )
+                    emitter.onComplete()
+                } catch (e: Exception) {
+                    emitter.onError(e)
+                }
             }
-            val startLocalTime = LocalTime.of(startTime.hour, startTime.minute, 0)
-            startTime += point.stayTimeMinute / 60.0
-            val endLocalTime = startLocalTime.plusMinutes(point.stayTimeMinute)
+        }, BackpressureStrategy.DROP)
+    }
 
-            previous = point
+    fun getResult(): Single<PathFinderResult> {
+        if (_path == null) throw IllegalStateException("You must run getPath function before run it")
 
-            point to startLocalTime..endLocalTime
+        return Single.create {
+            runBlocking {
+                it.onSuccess(directionsRepository.getResultPath(_path!!, input.startTime))
+            }
         }
     }
 
     private suspend fun runDfs(
         depth: Int,
+        flowableEmitter: FlowableEmitter<PathFinderState>,
+        middleMinCost: Double,
         currentWeight: Double,
         visited: Collection<Point>,
         mealTimes: List<Double>,
         elapsedTimeHour: Double
     ) {
+        flowableEmitter.onNext(
+            PathFinderState.Finding(
+                allEdgesCount = edgesCount,
+                searchEdgesCount = functionCallCount++,
+            )
+        )
         val endpointMoveTimeHour = directionsRepository.getMoveTime(allPoints, visited.last(), input.endPoint)
 
         val totalCost = getTotalCost(
@@ -93,23 +133,29 @@ class PathFinder(
             mealTimes = mealTimes
         )
 
-        if(totalCost < minCost) {
+        if (totalCost < minCost) {
             minCost = totalCost
-            path = visited.plusElement(input.endPoint)
+            _path = visited.plusElement(input.endPoint)
         }
 
-        (input.points - visited.toSet()).forEach { willVisitPoint ->
+        if (middleMinCost < totalCost) return
+
+        val rest = (input.points - visited.toSet())
+
+        rest.forEach { willVisitPoint ->
             val moveTimeHour = directionsRepository.getMoveTime(allPoints, visited.last(), willVisitPoint)
 
-            if(startTimeDouble + elapsedTimeHour + moveTimeHour >= endTimeDouble + END_TIME_THRESHOLD_HOUR) return@forEach
+            if (startTimeDouble + elapsedTimeHour + moveTimeHour >= endTimeDouble + END_TIME_THRESHOLD_HOUR) return@forEach
 
             val timeWeight = timeFunc(moveTimeHour)
 
             runDfs(
                 depth = depth + 1,
+                flowableEmitter = flowableEmitter,
+                middleMinCost = totalCost,
                 currentWeight = currentWeight + timeWeight,
                 visited = visited.plusElement(willVisitPoint),
-                mealTimes = if(willVisitPoint.isMeal) {
+                mealTimes = if (willVisitPoint.isMeal) {
                     mealTimes.plusElement(startTimeDouble + elapsedTimeHour + moveTimeHour)
                 } else {
                     mealTimes
@@ -129,23 +175,24 @@ class PathFinder(
         return currentWeight * endTimeWeight * mealTimes.mealTimeWeight
     }
 
-    private val List<Double>.mealTimeWeight: Double get() {
-        var weight = 1.0
-        mealTimesDouble.forEachIndexed { index, hour ->
-            if(index > this.lastIndex) {
-                weight *= MEAL_TIME_MAX_VALUE
-                return@forEachIndexed
+    private val List<Double>.mealTimeWeight: Double
+        get() {
+            var weight = 1.0
+            mealTimesDouble.forEachIndexed { index, hour ->
+                if (index > this.lastIndex) {
+                    weight *= MEAL_TIME_MAX_VALUE
+                    return@forEachIndexed
+                }
+
+                weight *= getMealTimeGaussian(hour, this[index])
             }
 
-            weight *= getMealTimeGaussian(hour, this[index])
-        }
+            repeat(size - mealTimesDouble.size) {
+                weight *= MEAL_TIME_MAX_VALUE
+            }
 
-        repeat(size - mealTimesDouble.size) {
-            weight *= MEAL_TIME_MAX_VALUE
+            return weight
         }
-
-        return weight
-    }
 
     private val Point.isStartPoint get() = this == input.startPoint
     private val Point.isEndPoint get() = this == input.endPoint
@@ -158,14 +205,24 @@ class PathFinder(
     private val Double.hour get() = toInt()
     private val Double.minute get() = ((this - toInt()) * 60).toInt()
 
+    private val Int.factorial: Long
+        get() {
+            var fac = 1L
+            for (i in 1..this) {
+                fac *= i
+            }
+
+            return fac
+        }
+
     companion object {
         const val VERBOSE = true
-        private const val MOVE_TIME_POW = 4
-        private const val MOVE_TIME_MAX_VALUE = 8.0
+        private const val MOVE_TIME_POW = 2
+        private const val MOVE_TIME_MAX_VALUE = 4.0
         private const val MEAL_TIME_SIGMA = 0.5
         private const val MEAL_TIME_MAX_VALUE = 2
-        private const val END_TIME_SIGMA = 0.5
-        private const val END_TIME_MAX_VALUE = 16
+        private const val END_TIME_SIGMA = 1
+        private const val END_TIME_MAX_VALUE = 64
         private const val END_TIME_THRESHOLD_HOUR = 2.0
 
         //Sigmoid 함수
@@ -211,9 +268,9 @@ class PathFinder(
                     exp(-(mean - value).pow(2) / 2 * END_TIME_SIGMA * END_TIME_SIGMA) /
                     maxValue
 
-            if(value in (mean - 0.75)..(mean + 0.25)) return 1.0
+            if (value in (mean - 0.75)..(mean + 0.25)) return 1.0
 
-            return END_TIME_MAX_VALUE - result * (END_TIME_MAX_VALUE - 1)
+            return ((value - mean) * 2).pow(4) + 1
         }
 
         @JvmStatic
@@ -249,7 +306,7 @@ class PathFinder(
                 )
             })
 
-            println("===========Path finder test===========")
+            println("\n===========Path finder test===========\n")
             val testPathFinderInput = PathFinderInput(
                 startTime = LocalTime.of(10, 0, 0),
                 endHopeTime = LocalTime.of(22, 0, 0),
@@ -264,15 +321,63 @@ class PathFinder(
 
             val pathFinder = PathFinder(ServiceLocator.directionsRepository, testPathFinderInput)
 
-            runBlocking {
-                val format = DateTimeFormatter.ofPattern("HH:mm")
-                val result = pathFinder.getPath()
-                    .mapIndexed { index, (point, timeRange) ->  "#${index + 1} : $point\t\t${timeRange.start.format(format)} ~ ${timeRange.endInclusive.format(format)}" }
-                    .joinToString(separator = "\n")
+            val format = DateTimeFormatter.ofPattern("HH:mm")
+            val startTime = System.nanoTime()
+            println("An optimal route for ${pathFinder.input.points.size} points")
+            pathFinder.getPath().subscribe(
+                {
+                    when (it) {
+                        is PathFinderState.Finding -> {
+                            print("\r")
+                            print(
+                                String.format(
+                                    "%.2f%% (%d / %d)",
+                                    it.searchEdgesCount / it.allEdgesCount.toDouble() * 100,
+                                    it.searchEdgesCount,
+                                    it.allEdgesCount
+                                )
+                            )
+                        }
 
-                println(result)
-                println("Total Weight: ${pathFinder.minCost}")
-            }
+                        is PathFinderState.Found -> {
+                            val endTime = System.nanoTime()
+                            println()
+                            val result = it.path
+                                .mapIndexed { index, (point, timeRange) ->
+                                    "#${index + 1} : $point\t\t${
+                                        timeRange.start.format(
+                                            format
+                                        )
+                                    } ~ ${timeRange.endInclusive.format(format)}"
+                                }
+                                .joinToString(separator = "\n")
+
+                            println(result)
+                            println("Total Weight: ${pathFinder.minCost}")
+                            println(
+                                "Elapsed Time: ${
+                                    LocalTime.ofNanoOfDay(endTime - startTime).format(DateTimeFormatter.ISO_TIME)
+                                }"
+                            )
+
+                            /*
+                            9 -> 6s
+                            10 -> 11s
+                            11 -> 30s
+                            12 -> 1m 29s
+                             */
+                        }
+                    }
+                }, {}, {
+
+                    pathFinder.getResult().subscribe { result ->
+                        val gsonBuilder = GsonBuilder()
+                        gsonBuilder.registerTypeAdapter(LocalTime::class.java, LocalTimeSerializer())
+                        val gson: Gson = gsonBuilder.setPrettyPrinting().create()
+                        println(gson.toJson(result))
+                    }
+                }
+            )
         }
     }
 }

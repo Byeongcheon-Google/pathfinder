@@ -22,6 +22,7 @@ dependencies {
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.9.2")
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("io.reactivex.rxjava3:rxjava:3.1.6")
     implementation(kotlin("stdlib-jdk8"))
     implementation(compose.desktop.currentOs)
 }
