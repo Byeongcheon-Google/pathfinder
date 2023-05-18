@@ -1,9 +1,12 @@
 package com.bcgg.pathfinder
 
 import com.bcgg.model.Point
+import java.time.LocalDate
 import java.time.LocalTime
 
 data class PathFinderResult(
+    val foundTime: LocalTime,
+    val date: LocalDate,
     val result: List<PathFinderItem>
 ) {
     sealed class PathFinderItem {

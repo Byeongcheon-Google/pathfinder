@@ -9,8 +9,10 @@ import com.bcgg.model.Point
 import com.bcgg.pathfinder.PathFinderResult
 import com.bcgg.source.DirectionsLocalDataSource
 import kotlinx.coroutines.runBlocking
+import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.math.ceil
+
 
 class DirectionsRepository(
     private val directionsLocalDataSource: DirectionsLocalDataSource,
@@ -38,10 +40,11 @@ class DirectionsRepository(
             goal = end,
             waypoints = waypoints
         )
+        //네이버 오류
         if (directionsResponse.code != 0) throw RuntimeException(directionsResponse.message)
 
         val durations = mutableListOf<Double>()
-
+        //던져진 점 갯수 != 경유지 점 갯수 error
         with(directionsResponse.route!!.traoptimal[0].summary) {
             if (this.waypoints != null) {
                 durations.addAll(this.waypoints.map { it.duration / 1000.0 / 60 / 60 })
@@ -57,7 +60,7 @@ class DirectionsRepository(
         return (durations[0])
     }
 
-    suspend fun getResultPath(points: List<Point>, startTime: LocalTime): PathFinderResult {
+    suspend fun getResultPath(points: List<Point>, startTime: LocalTime, date: LocalDate, foundTime: LocalTime): PathFinderResult {
         val start = points.first().toNaverMapApiRequest()
         val waypoints =
             points.slice(1 until points.size).joinToString(separator = "|") { it.toNaverMapApiRequest() }
@@ -198,7 +201,7 @@ class DirectionsRepository(
             )
         }
 
-        return PathFinderResult(resultItems)
+        return PathFinderResult(foundTime, date, resultItems)
     }
 
     private fun calcDistanceWithUnit(meters: Long): Pair<Double, PathFinderResult.DistanceUnit> {

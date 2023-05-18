@@ -5,11 +5,16 @@ import com.bcgg.model.NaverMapKey
 import com.bcgg.model.Point
 import com.bcgg.repository.DirectionsRepository
 import com.bcgg.source.DirectionsLocalDataSource
+import com.bcgg.util.LocalDateSerializer
+import com.bcgg.util.LocalTimeSerializer
 import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.io.File
+import java.time.LocalDate
+import java.time.LocalTime
 
 object ServiceLocator {
     private val file = File("src/main/resources/naver_map_key.json")
@@ -37,6 +42,16 @@ object ServiceLocator {
     val directionsRepository = DirectionsRepository(
         directionsLocalDataSource, naverMapDirectionsApi
     )
+
+    private val gsonBuilder = GsonBuilder().apply {
+        registerTypeAdapter(LocalDate::class.java, LocalDateSerializer())
+        registerTypeAdapter(LocalTime::class.java, LocalTimeSerializer())
+    }
+    private var _gson: Gson? = null
+    val gson: Gson get() {
+        if(_gson == null) _gson = gsonBuilder.setPrettyPrinting().create()
+        return _gson!!
+    }
 }
 
 object Samples {

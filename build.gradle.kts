@@ -2,12 +2,18 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     id("java")
-    kotlin("jvm") version "1.8.10"
     id("org.jetbrains.compose") version "1.3.1"
+
+    id("org.springframework.boot") version "2.7.11"
+    id("io.spring.dependency-management") version "1.0.15.RELEASE"
+
+    kotlin("jvm") version "1.8.10"
+    kotlin("plugin.spring") version "1.6.21"
 }
 
 group = "com.bcgg"
-version = "1.0-SNAPSHOT"
+version = ""
+java.sourceCompatibility = JavaVersion.VERSION_11
 
 repositories {
     mavenCentral()
@@ -25,6 +31,12 @@ dependencies {
     implementation("io.reactivex.rxjava3:rxjava:3.1.6")
     implementation(kotlin("stdlib-jdk8"))
     implementation(compose.desktop.currentOs)
+    compileOnly ("org.projectlombok:lombok")
+    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("org.jetbrains.kotlin:kotlin-reflect")
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+
 }
 
 compose.desktop {

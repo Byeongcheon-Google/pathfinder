@@ -10,6 +10,8 @@ import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import io.reactivex.rxjava3.core.*
 import kotlinx.coroutines.runBlocking
+import org.springframework.stereotype.Service
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.*
@@ -26,11 +28,12 @@ import kotlin.math.*
  * 이게 잘 짜여진 경로인가? 고려사항
  * 1. 식사를 2번 하는 것으로 정했지만 이로 인해 여행지를 많이 방문하지 못할 경우
  * 2. 1200 식사를 원하는데 실제 1230 식사의 경우 이는 잘 짜여진 것인가?
- * 3.
+ *
  *
  * @see PathFinderInput
  * @see Point
  */
+
 class PathFinder(
     val directionsRepository: DirectionsRepository,
     val input: PathFinderInput
@@ -105,7 +108,7 @@ class PathFinder(
 
         return Single.create {
             runBlocking {
-                it.onSuccess(directionsRepository.getResultPath(_path!!, input.startTime))
+                it.onSuccess(directionsRepository.getResultPath(_path!!, input.startTime, input.date, calculateEndTime!!))
             }
         }
     }
@@ -125,6 +128,7 @@ class PathFinder(
                 searchEdgesCount = functionCallCount++,
             )
         )
+        //network errorm, cahce error,
         val endpointMoveTimeHour = directionsRepository.getMoveTime(allPoints, visited.last(), input.endPoint)
 
         val totalCost = getTotalCost(
@@ -308,6 +312,7 @@ class PathFinder(
 
             println("\n===========Path finder test===========\n")
             val testPathFinderInput = PathFinderInput(
+                date = LocalDate.now(),
                 startTime = LocalTime.of(10, 0, 0),
                 endHopeTime = LocalTime.of(22, 0, 0),
                 mealTimes = listOf(
@@ -317,6 +322,7 @@ class PathFinder(
                 startPoint = Samples.sampleHouse1,
                 endPoint = Samples.sampleHouse2,
                 points = Samples.points,
+
             )
 
             val pathFinder = PathFinder(ServiceLocator.directionsRepository, testPathFinderInput)
@@ -324,6 +330,7 @@ class PathFinder(
             val format = DateTimeFormatter.ofPattern("HH:mm")
             val startTime = System.nanoTime()
             println("An optimal route for ${pathFinder.input.points.size} points")
+            // subscribe :
             pathFinder.getPath().subscribe(
                 {
                     when (it) {
@@ -338,7 +345,7 @@ class PathFinder(
                                 )
                             )
                         }
-
+          //              Pair<Point, ClosedRange<LocalTime>
                         is PathFinderState.Found -> {
                             val endTime = System.nanoTime()
                             println()
@@ -373,6 +380,7 @@ class PathFinder(
                     pathFinder.getResult().subscribe { result ->
                         val gsonBuilder = GsonBuilder()
                         gsonBuilder.registerTypeAdapter(LocalTime::class.java, LocalTimeSerializer())
+                        gsonBuilder.registerTypeAdapter(LocalDate::class.java, LocalTimeSerializer())
                         val gson: Gson = gsonBuilder.setPrettyPrinting().create()
                         println(gson.toJson(result))
                     }

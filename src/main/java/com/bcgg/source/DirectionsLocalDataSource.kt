@@ -2,9 +2,10 @@ package com.bcgg.source
 
 import com.bcgg.model.Point
 import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap
+import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
-
+@Component
 class DirectionsLocalDataSource {
     val cache: ConcurrentMap<Pair<Point, Point>, Double> =
         ConcurrentLinkedHashMap.Builder<Pair<Point, Point>, Double>()
